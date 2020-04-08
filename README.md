@@ -7,7 +7,7 @@ A simple application to deploy to the server via POST with pull, status, and log
 ### Congiguration
 
 port in file 9148  
-hash encrypted key with sh256  
+hash encrypted key with sha256  
 export PRIVATE_KEY=[sha256]  
 
 
