@@ -1,53 +1,76 @@
-const exec = require('child_process').exec;
-const http = require('http')
-const url  = require('url')
-const private_key = process.env.PRIVATE_KEY
+const { exec } = require('child_process');
+const http = require('http');
+const url = require('url');
+const util = require('util');
 
-http.createServer(function(req,res){
-    res.writeHead(200, {'Content-Type': 'text/htmll'})
-    var q = url.parse(req.url, true).query 
-    
-    if(q.key == private_key && req.method == 'POST'){
+const private_key = process.env.PRIVATE_KEY;
+const PORT = 9148;
 
-      if(q.verbo == 'pull'){
-        const pull = exec(`git -C /var/www/${q.project}/ pull origin master`,(err,stdout, stderr) =>{
-            if (err) {
-                res.end(`exec error: ${err}`);
-                return;
-            }
-            console.log(`stdout: ${stdout}`)
-            console.log(`stderr: ${stderr}`)
-            res.end(`${stderr} <br> ${stdout}`);
-            
-        });
+const execPromise = util.promisify(exec);
 
-      }
+// Handles the "pull" request
+const handlePullRequest = async (queryParams, response) => {
+  const { project } = queryParams;
+  const projectPath = `/var/www/${project}`;
+  const command = `git -C ${projectPath} pull origin master`;
 
-      if(q.verbo == 'status'){
-            exec(`git -C /var/www/${q.project}/ status`)
-            .stdout.on('data',(data) => {
-                res.write(`${data}`)
-            })
-            .on('close',(data) =>{
-                res.end(data)
-            })
+  try {
+    const { stdout, stderr } = await execPromise(command);
+    console.log(`stdout: ${stdout}`);
+    console.log(`stderr: ${stderr}`);
+    response.end(`${stderr} <br> ${stdout}`);
+  } catch (err) {
+    response.end(`exec error: ${err}`);
+  }
+};
 
-        }
-        
-        if(q.verbo == 'log'){
-            exec(`git -C /var/www/${q.project}/ log --graph --abbrev-commit --decorate --date=relative --all`)
-              .stdout.on('data',(data) =>{
-                res.write(`${data}`)
-              })
-              .on('close',(data) =>{
-                res.end(data)
-              })
-        }
+// Handles the "status" request
+const handleStatusRequest = async (queryParams, response) => {
+  const { project } = queryParams;
+  const projectPath = `/var/www/${project}`;
+  const command = `git -C ${projectPath} status`;
+
+  try {
+    const { stdout } = await execPromise(command);
+    response.end(stdout);
+  } catch (err) {
+    response.end(`exec error: ${err}`);
+  }
+};
+
+// Handles the "log" request
+const handleLogRequest = async (queryParams, response) => {
+  const { project } = queryParams;
+  const projectPath = `/var/www/${project}`;
+  const command = `git -C ${projectPath} log --graph --abbrev-commit --decorate --date=relative --all`;
+
+  try {
+    const { stdout } = await execPromise(command);
+    response.end(stdout);
+  } catch (err) {
+    response.end(`exec error: ${err}`);
+  }
+};
+
+const server = http.createServer(async (request, response) => {
+  response.writeHead(200, { 'Content-Type': 'text/html' });
+  const queryParams = url.parse(request.url, true).query;
+
+  if (queryParams.key === private_key && request.method === 'POST') {
+    if (queryParams.verbo === 'pull') {
+      await handlePullRequest(queryParams, response);
+    } else if (queryParams.verbo === 'status') {
+      await handleStatusRequest(queryParams, response);
+    } else if (queryParams.verbo === 'log') {
+      await handleLogRequest(queryParams, response);
     }
-    else{
-        res.writeHead(401, {'Content-Type': 'text/plain'});
-        res.end('Unauthorized')
-    }
+  } else {
+    // The response is sent when the key is invalid or the request method is not POST
+    response.writeHead(401, { 'Content-Type': 'text/plain' });
+    response.end('Unauthorized');
+  }
+});
 
-}).listen(9148)
-
+server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
