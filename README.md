@@ -35,7 +35,7 @@ Host: [ip]:9148
 
 ### Running
 ```
-nohup nodejs deploy.js &!
+nohup node deploy.js > deploy.log 2>&1 &
 ```
 
 ### Stop
